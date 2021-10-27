@@ -8,7 +8,30 @@ module Spree
 
           before_action :require_spree_current_user, only:[:create]
 
-          def create
+          def returned_items
+            render_serialized_payload { {"data": {"returned_items": order.return_items.map(&:inventory_unit)} } }
+          end 
+
+          def create            
+            if order.shipment_state == "shipped"
+              for li in params[:return_items] do
+                for shipment in order.shipments
+                  line_item =  shipment.line_items.select{|hash| hash['variant_id'] == li[:variant_id]}
+                  if line_item.any?
+                    if line_item.first.product.returnable == true
+                      if Time.current > shipment.shipped_at + line_item.first.product.return_days.days
+                        return render_serialized_payload { {"data":  "Return days exceeded, can not return variant id " + li[:variant_id].to_s} }
+                      end
+                    else 
+                      return render_serialized_payload { {"data":  "Variant id " + li[:variant_id].to_s + " is not returnable"} }
+                    end
+                  end
+                end
+              end
+            else
+              return render_serialized_payload { {"data":  "Order is not shipped"} }
+            end            
+
             for ri in params[:return_items] do
               inventory_ids = []
               for inventory in order.inventory_units
@@ -41,8 +64,6 @@ module Spree
                   return_items.return_authorization_id = return_authorization.id
                   return_items.inventory_unit_id = new_inventory_unit.id
                   return_items.pre_tax_amount = (item.first[:price].to_f * ri[:quantity]).round(2)
-                  return_items.reception_status = "awaiting"
-                  return_items.acceptance_status = "pending"
                   return_items.save
                 end
 
@@ -53,15 +74,17 @@ module Spree
                   return_items.return_authorization_id = return_authorization.id
                   return_items.inventory_unit_id = main_inventory_unit.first[:id]
                   return_items.pre_tax_amount = (item.first[:price].to_f * ri[:quantity]).round(2)
-                  return_items.reception_status = "awaiting"
-                  return_items.acceptance_status = "pending"
                   return_items.save
                 end
               else 
                 return render_serialized_payload { {"data":  "Qunatity exceeded for variant id " +  ri[:variant_id].to_s} }
               end
             end    
-              render_serialized_payload { {"data":  "Success"} }
+            render_serialized_payload { {"data": {"returned_items": order.return_items.map(&:inventory_unit)} } }
+
+            #in case if you want to render return_authorizations, return_items, inventory_units data
+            # render_serialized_payload { {"data": {"return_authorizations": order.return_authorizations, "return_items": order.return_items,"inventory_units": order.inventory_units} } }
+
           end
 
           private
