@@ -20,16 +20,16 @@ module Spree
                   if line_item.any?
                     if line_item.first.product.returnable == true
                       if Time.current > shipment.shipped_at + line_item.first.product.return_days.days
-                        return render_serialized_payload { {"data":  "Return days exceeded, can not return variant id " + li[:variant_id].to_s} }
+                         return render_error_payload("Return days exceeded, can not return variant id " + li[:variant_id].to_s)
                       end
                     else 
-                      return render_serialized_payload { {"data":  "Variant id " + li[:variant_id].to_s + " is not returnable"} }
+                      return render_error_payload("Variant id " + li[:variant_id].to_s + " is not returnable")
                     end
                   end
                 end
               end
             else
-              return render_serialized_payload { {"data":  "Order is not shipped"} }
+              return render_error_payload("Order is not shipped")
             end            
 
             for ri in params[:return_items] do
@@ -77,7 +77,7 @@ module Spree
                   return_items.save
                 end
               else 
-                return render_serialized_payload { {"data":  "Qunatity exceeded for variant id " +  ri[:variant_id].to_s} }
+                return render_error_payload("Qunatity exceeded for variant id " +  ri[:variant_id].to_s)
               end
             end    
             render_serialized_payload { {"data": {"returned_items": order.return_items.map(&:inventory_unit)} } }
